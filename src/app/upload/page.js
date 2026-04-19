@@ -24,8 +24,8 @@ export default function UploadPage() {
 
   function handleFile(f) {
     if (!f) return;
-    if (!f.type.startsWith('image/')) {
-      setError('Please select an image file');
+    if (!f.type.startsWith('image/') && !f.type.startsWith('video/')) {
+      setError('Please select an image or video');
       return;
     }
     setFile(f);
@@ -45,16 +45,19 @@ export default function UploadPage() {
     setError('');
     setUploading(true);
     setPhase('uploading');
+    setProgress(0);
 
     try {
       const upload = await api.uploadFile(file, (p) => setProgress(p));
       setPhase('processing');
+      setProgress(10);
 
       const final = await api.pollSession(upload.session_id, (s) => {
-        if (s.progress != null) setProgress(s.progress);
+        if (typeof s.progress === 'number') setProgress(s.progress);
       });
 
       setResult(final);
+      setProgress(100);
       setPhase('done');
     } catch (err) {
       setError(err.message || 'Upload failed');
@@ -75,7 +78,6 @@ export default function UploadPage() {
 
   return (
     <main className="min-h-screen bg-ink text-bone">
-      {/* Top bar */}
       <header className="px-8 py-6 flex justify-between items-center border-b border-bone/10">
         <Link href="/" className="font-mono text-xs tracking-wider">
           <span className="text-rust">●</span> FEELER / ANALYZE
@@ -97,7 +99,7 @@ export default function UploadPage() {
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* ── Drop zone / preview ─────────────────── */}
+          {/* Drop zone / preview */}
           <div className="lg:col-span-7">
             {!preview ? (
               <div
@@ -108,20 +110,39 @@ export default function UploadPage() {
               >
                 <div className="font-display text-7xl font-light italic text-mist">+</div>
                 <div className="text-center">
-                  <div className="font-display text-2xl mb-2">Drop an image here</div>
+                  <div className="font-display text-2xl mb-2">Drop a photo or video</div>
                   <div className="font-mono text-xs text-mist uppercase tracking-wider">or click to browse</div>
                 </div>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   className="hidden"
                   onChange={(e) => handleFile(e.target.files?.[0])}
                 />
               </div>
             ) : (
               <div className="relative aspect-[4/3] border border-bone/20 overflow-hidden bg-ink">
-                <img src={preview} alt="preview" className="w-full h-full object-contain" />
+                {phase === 'done' && result?.download?.download_url ? (
+                  result.download.file_type === 'video' || (result.download.download_url || '').toLowerCase().includes('.mp4') ? (
+                    <video
+                      src={result.download.download_url}
+                      controls
+                      autoPlay
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={result.download.download_url}
+                      alt="annotated"
+                      className="w-full h-full object-contain"
+                    />
+                  )
+                ) : file?.type.startsWith('video/') ? (
+                  <video src={preview} className="w-full h-full object-contain" controls />
+                ) : (
+                  <img src={preview} alt="preview" className="w-full h-full object-contain" />
+                )}
                 {phase !== 'done' && (
                   <button
                     onClick={reset}
@@ -134,7 +155,7 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* ── Side panel ──────────────────────────── */}
+          {/* Side panel */}
           <div className="lg:col-span-5">
             <div className="font-mono text-xs uppercase tracking-wider text-mist mb-3">Status</div>
             <div className="font-display text-4xl mb-8 italic">
@@ -163,7 +184,7 @@ export default function UploadPage() {
               </div>
             )}
 
-            {phase === 'done' && result && <ResultPanel result={result} />}
+            {phase === 'done' && result && <ResultSummary result={result} />}
 
             {phase === 'idle' && file && (
               <button onClick={startAnalysis} className="btn-primary w-full">
@@ -183,68 +204,29 @@ export default function UploadPage() {
   );
 }
 
-function ResultPanel({ result }) {
-  // Try to handle multiple possible response shapes from the backend
-  const faces = result.faces || result.predictions || result.results || [];
-  const single = result.emotion || result.prediction;
-
-  if (single && faces.length === 0) {
-    return <SingleResult data={single} />;
-  }
-
-  if (faces.length === 0) {
-    return (
-      <div className="border border-bone/20 p-6">
-        <div className="font-mono text-xs text-mist mb-2">RAW RESPONSE</div>
-        <pre className="text-xs font-mono overflow-auto">{JSON.stringify(result, null, 2)}</pre>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {faces.map((f, i) => (
-        <SingleResult key={i} data={f} idx={i + 1} total={faces.length} />
-      ))}
-    </div>
-  );
-}
-
-function SingleResult({ data, idx, total }) {
-  const emotion = (data.emotion || data.label || 'unknown').toUpperCase();
-  const confidence = data.confidence || data.score || data.probability;
-  const valence = data.valence;
-  const arousal = data.arousal;
-  const intensity = data.intensity;
-
+function ResultSummary({ result }) {
+  const total = result.total_faces ?? result.total_frames ?? null;
   return (
     <div className="border border-bone/20 p-6">
-      {idx && total > 1 && (
-        <div className="font-mono text-xs text-mist mb-2">FACE {idx} OF {total}</div>
-      )}
-      <div className="font-display text-6xl italic font-light text-rust mb-2">{emotion}</div>
-      {confidence != null && (
+      <div className="font-mono text-xs text-mist mb-2">SESSION COMPLETE</div>
+      <div className="font-display text-4xl italic font-light text-rust mb-4">
+        Analysed.
+      </div>
+      {total != null && (
         <div className="font-mono text-xs text-mist">
-          {(confidence * 100).toFixed(1)}% CONFIDENCE
+          {total} {total === 1 ? 'face' : 'faces'} read
         </div>
       )}
-
-      {(valence || arousal || intensity) && (
-        <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-bone/10">
-          {valence && <Dim label="Valence" value={valence} />}
-          {arousal && <Dim label="Arousal" value={arousal} />}
-          {intensity && <Dim label="Intensity" value={intensity} />}
-        </div>
+      {result.download?.download_url && (
+        <a
+          href={result.download.download_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block font-mono text-xs uppercase tracking-wider text-rust hover:underline mt-4"
+        >
+          Open full-size →
+        </a>
       )}
-    </div>
-  );
-}
-
-function Dim({ label, value }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-wider text-mist mb-1">{label}</div>
-      <div className="font-display text-lg italic">{typeof value === 'string' ? value : JSON.stringify(value)}</div>
     </div>
   );
 }

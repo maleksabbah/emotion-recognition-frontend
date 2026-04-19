@@ -78,7 +78,7 @@ class APIClient {
     }
   }
 
-  // ── Auth ────────────────────────────────────────
+  // ── Auth ────────────────────────────────────────────
   async register(email, username, password) {
     return this.request('POST', '/auth/register', { email, username, password });
   }
@@ -97,19 +97,16 @@ class APIClient {
     return this.request('GET', '/auth/me');
   }
 
-  // ── Upload (presigned URL flow) ───────────────────
+  // ── Upload (presigned URL flow) ─────────────────────
   async uploadFile(file, onProgress) {
-    // Step 1: get presigned URL from gateway
     const presign = await this.request('POST', '/upload/request', {
       filename: file.name,
       content_type: file.type || 'image/jpeg',
       size: file.size,
     });
 
-    // Step 2: PUT directly to S3/MinIO
     await this.putToS3(presign.upload_url, file, onProgress);
 
-    // Step 3: tell gateway upload is complete
     const result = await this.request('POST', '/upload/complete', {
       session_id: presign.session_id,
       s3_key: presign.s3_key,
@@ -141,7 +138,7 @@ class APIClient {
     });
   }
 
-  // ── Sessions ────────────────────────────────────
+  // ── Sessions ────────────────────────────────────────
   async getSession(sessionId) {
     return this.request('GET', `/sessions/${sessionId}/status`);
   }
@@ -154,16 +151,45 @@ class APIClient {
     return this.request('GET', '/sessions');
   }
 
-  // Poll session until completion
-  async pollSession(sessionId, onUpdate, intervalMs = 1500) {
+  // Poll session until completion.
+  // Backend status values: "active" | "processing" | "burning" | "complete" | "failed"
+  // Frontend animates a smooth fake progress while waiting.
+  async pollSession(sessionId, onUpdate, intervalMs = 1000) {
+    const DONE = new Set(['complete', 'completed']);
+    const FAIL = new Set(['failed', 'error']);
+
     return new Promise((resolve, reject) => {
+      let fake = 10; // fake progress so the UI moves even when backend sends nothing
+
       const tick = async () => {
         try {
           const status = await this.getSession(sessionId);
-          if (onUpdate) onUpdate(status);
-          if (status.state === 'completed' || status.status === 'completed') {
-            resolve(status);
-          } else if (status.state === 'failed' || status.status === 'failed') {
+          const s = (status.status || status.state || '').toLowerCase();
+
+          // Pick the best progress number to show the user.
+          let progress;
+          if (typeof status.progress === 'number' && status.progress > 0) {
+            progress = Math.round(status.progress * 100);
+          } else if (s === 'burning') {
+            progress = Math.max(fake, 85);
+          } else {
+            fake = Math.min(80, fake + 7);
+            progress = fake;
+          }
+          if (DONE.has(s)) progress = 100;
+
+          onUpdate?.({ ...status, status: s, progress });
+
+          if (DONE.has(s)) {
+            // Try to fetch the burned download URL + raw session record so the result panel has data.
+            let download = null;
+            try {
+              download = await this.getSessionDownload(sessionId);
+            } catch (e) {
+              // Non-fatal — just means we can't show the image.
+            }
+            resolve({ ...status, status: s, download });
+          } else if (FAIL.has(s)) {
             reject(new Error(status.error || 'Processing failed'));
           } else {
             setTimeout(tick, intervalMs);
@@ -176,7 +202,7 @@ class APIClient {
     });
   }
 
-  // ── Live mode WebSocket ─────────────────────────
+  // ── Live mode WebSocket ─────────────────────────────
   openLiveSocket(onMessage, onError, onClose) {
     const url = `${WS_URL}/live?token=${this.accessToken || ''}`;
     const ws = new WebSocket(url);
