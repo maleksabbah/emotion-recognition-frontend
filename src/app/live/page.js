@@ -5,6 +5,36 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 
+// Pull the inner payload out regardless of whether the gateway wraps it.
+// Backend currently sends {"type":"result","data":{ top_emotion, valence, ... }}.
+// Older shapes (flat object, or nested under .faces[0]) are still supported
+// so a server change later doesn't silently break the UI.
+function extractPrediction(raw) {
+  if (!raw) return null;
+  const payload = raw.type === 'result' && raw.data ? raw.data : raw;
+  const face = payload.faces?.[0] || payload.predictions?.[0] || null;
+  const emotion =
+    payload.top_emotion ||
+    payload.emotion ||
+    face?.top_emotion ||
+    face?.emotion ||
+    null;
+  if (!emotion) return null;
+  return {
+    emotion,
+    confidence:
+      payload.top_confidence ??
+      payload.confidence ??
+      face?.top_confidence ??
+      face?.confidence ??
+      null,
+    valence: payload.valence ?? face?.valence ?? null,
+    arousal: payload.arousal ?? face?.arousal ?? null,
+    intensity: payload.intensity ?? face?.intensity ?? null,
+  };
+}
+
+
 export default function LivePage() {
   const router = useRouter();
   const videoRef = useRef(null);
@@ -38,18 +68,21 @@ export default function LivePage() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
 
-      // Open WebSocket
       const ws = api.openLiveSocket(
         (data) => {
-          setLatest(data);
-          setHistory((h) => [data, ...h].slice(0, 8));
+          // Server emits two message shapes: {type:"session_created", ...}
+          // and {type:"result", data:{...}}. Only the latter has a prediction.
+          if (data?.type && data.type !== 'result') return;
+          const pred = extractPrediction(data);
+          if (!pred) return;
+          setLatest(pred);
+          setHistory((h) => [pred, ...h].slice(0, 8));
         },
         (err) => setError('WebSocket error: ' + (err.message || 'unknown')),
         () => setStreaming(false),
       );
       wsRef.current = ws;
 
-      // Wait for socket to open then start frame loop
       ws.addEventListener('open', () => {
         setStreaming(true);
         let frames = 0;
@@ -82,7 +115,7 @@ export default function LivePage() {
             'image/jpeg',
             0.7,
           );
-        }, 200); // 5 fps
+        }, 200);
       });
     } catch (err) {
       setError(err.message || 'Could not access camera');
@@ -106,9 +139,6 @@ export default function LivePage() {
     }
     setFps(0);
   }
-
-  const currentEmotion = latest?.emotion || latest?.faces?.[0]?.emotion || latest?.predictions?.[0]?.emotion;
-  const currentConf = latest?.confidence || latest?.faces?.[0]?.confidence;
 
   return (
     <main className="min-h-screen bg-ink text-bone">
@@ -166,15 +196,36 @@ export default function LivePage() {
                 </div>
               )}
 
-              {streaming && currentEmotion && (
+              {streaming && latest?.emotion && (
                 <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-ink via-ink/60 to-transparent">
                   <div className="font-mono text-xs uppercase tracking-wider text-mist mb-2">CURRENT</div>
                   <div className="font-display text-6xl italic font-light text-rust">
-                    {currentEmotion.toUpperCase()}
+                    {latest.emotion.toUpperCase()}
                   </div>
-                  {currentConf != null && (
+                  {latest.confidence != null && (
                     <div className="font-mono text-xs text-mist mt-2">
-                      {(currentConf * 100).toFixed(0)}% certain
+                      {(latest.confidence * 100).toFixed(0)}% certain
+                    </div>
+                  )}
+
+                  {/* Secondary affect dimensions — small, mono, beneath the main label */}
+                  {(latest.valence || latest.arousal || latest.intensity) && (
+                    <div className="flex gap-6 mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
+                      {latest.valence && (
+                        <span>
+                          val <span className="text-bone">{latest.valence}</span>
+                        </span>
+                      )}
+                      {latest.arousal && (
+                        <span>
+                          arousal <span className="text-bone">{latest.arousal}</span>
+                        </span>
+                      )}
+                      {latest.intensity && (
+                        <span>
+                          intensity <span className="text-bone">{latest.intensity}</span>
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -205,22 +256,18 @@ export default function LivePage() {
               </div>
             ) : (
               <ul className="space-y-3">
-                {history.map((h, i) => {
-                  const e = h.emotion || h.faces?.[0]?.emotion || '—';
-                  const c = h.confidence || h.faces?.[0]?.confidence;
-                  return (
-                    <li
-                      key={i}
-                      className="flex items-center justify-between border-b border-bone/10 pb-3"
-                      style={{ opacity: 1 - i * 0.1 }}
-                    >
-                      <span className="font-display text-2xl italic">{e}</span>
-                      <span className="font-mono text-xs text-mist">
-                        {c != null ? `${(c * 100).toFixed(0)}%` : ''}
-                      </span>
-                    </li>
-                  );
-                })}
+                {history.map((h, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between border-b border-bone/10 pb-3"
+                    style={{ opacity: 1 - i * 0.1 }}
+                  >
+                    <span className="font-display text-2xl italic">{h.emotion || '—'}</span>
+                    <span className="font-mono text-xs text-mist">
+                      {h.confidence != null ? `${(h.confidence * 100).toFixed(0)}%` : ''}
+                    </span>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
