@@ -113,7 +113,7 @@ export default function LivePage() {
               }
             },
             'image/jpeg',
-            0.7,
+            1.0,
           );
         }, 200);
       });
