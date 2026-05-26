@@ -99,10 +99,18 @@ class APIClient {
 
   // ── Upload (presigned URL flow) ─────────────────────
   async uploadFile(file, onProgress) {
+    // Detect mode from the file's MIME type. The upload page only accepts
+    // images today, but we keep the branch so the same client works once
+    // video uploads are enabled. The backend defaults UploadCompleteRequest.mode
+    // to "video" if absent — leaving this out caused photo uploads to produce
+    // .mp4 output via the burner's video branch.
+    const mode = file.type && file.type.startsWith('video/') ? 'video' : 'photo';
+
     const presign = await this.request('POST', '/upload/request', {
       filename: file.name,
       content_type: file.type || 'image/jpeg',
       size: file.size,
+      mode,
     });
 
     await this.putToS3(presign.upload_url, file, onProgress);
@@ -110,6 +118,7 @@ class APIClient {
     const result = await this.request('POST', '/upload/complete', {
       session_id: presign.session_id,
       s3_key: presign.s3_key,
+      mode,
     });
 
     return { session_id: presign.session_id, ...result };
