@@ -5,10 +5,23 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 
+// ── Tunables ──────────────────────────────────────────────────────────
+// FPS at which we capture frames. Low FPS = fewer wrong-label flickers,
+// more readable headline. Raise to 5 for finer-grained feedback.
+const SEND_FPS = 1.5;
+// How many consecutive same-label predictions before we promote a label
+// to "stable" and show it in the big header. Eats brief blips.
+const STABILITY_FRAMES = 3;
+// Below this confidence, treat as "unknown" — model isn't sure enough
+// to commit to a single emotion.
+const CONFIDENCE_THRESHOLD = 0.40;
+// How many bars to show in the top-N distribution.
+const TOP_N = 3;
+
+
 // Pull the inner payload out regardless of whether the gateway wraps it.
-// Backend currently sends {"type":"result","data":{ top_emotion, valence, ... }}.
-// Older shapes (flat object, or nested under .faces[0]) are still supported
-// so a server change later doesn't silently break the UI.
+// Backend sends {"type":"result","data":{ top_emotion, valence, ... }}.
+// Older flat-object shapes still work.
 function extractPrediction(raw) {
   if (!raw) return null;
   const payload = raw.type === 'result' && raw.data ? raw.data : raw;
@@ -20,6 +33,12 @@ function extractPrediction(raw) {
     face?.emotion ||
     null;
   if (!emotion) return null;
+  const probs =
+    payload.emotions ||
+    payload.probabilities ||
+    face?.emotions ||
+    face?.probabilities ||
+    null;
   return {
     emotion,
     confidence:
@@ -31,6 +50,7 @@ function extractPrediction(raw) {
     valence: payload.valence ?? face?.valence ?? null,
     arousal: payload.arousal ?? face?.arousal ?? null,
     intensity: payload.intensity ?? face?.intensity ?? null,
+    probs,
   };
 }
 
@@ -41,10 +61,17 @@ export default function LivePage() {
   const canvasRef = useRef(null);
   const wsRef = useRef(null);
   const intervalRef = useRef(null);
+  // Tracks consecutive same-label predictions, kept in a ref so the WS
+  // callback can read/write without stale-closure problems.
+  const streakRef = useRef({ label: null, count: 0 });
 
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
+  // `latest` = most recent raw prediction (changes every frame).
+  // `stable` = label that's appeared ≥ STABILITY_FRAMES times AND has
+  // passed the confidence bar. This is what the big headline shows.
   const [latest, setLatest] = useState(null);
+  const [stable, setStable] = useState(null);
   const [history, setHistory] = useState([]);
   const [fps, setFps] = useState(0);
 
@@ -70,13 +97,31 @@ export default function LivePage() {
 
       const ws = api.openLiveSocket(
         (data) => {
-          // Server emits two message shapes: {type:"session_created", ...}
-          // and {type:"result", data:{...}}. Only the latter has a prediction.
           if (data?.type && data.type !== 'result') return;
           const pred = extractPrediction(data);
           if (!pred) return;
+
           setLatest(pred);
           setHistory((h) => [pred, ...h].slice(0, 8));
+
+          // Stability smoothing: only flip the headline emotion once the
+          // same label has come in N times in a row AND its confidence
+          // clears the threshold. Kills most per-frame flicker.
+          const confOk =
+            pred.confidence == null || pred.confidence >= CONFIDENCE_THRESHOLD;
+          const streak = streakRef.current;
+          if (pred.emotion === streak.label) {
+            streak.count += 1;
+          } else {
+            streak.label = pred.emotion;
+            streak.count = 1;
+          }
+          if (confOk && streak.count >= STABILITY_FRAMES) {
+            setStable(pred);
+          } else if (!confOk && streak.count >= STABILITY_FRAMES) {
+            // Steady but uncertain — show "reading…" placeholder.
+            setStable(null);
+          }
         },
         (err) => setError('WebSocket error: ' + (err.message || 'unknown')),
         () => setStreaming(false),
@@ -87,6 +132,7 @@ export default function LivePage() {
         setStreaming(true);
         let frames = 0;
         let lastTick = Date.now();
+        const intervalMs = Math.round(1000 / SEND_FPS);
 
         intervalRef.current = setInterval(() => {
           if (ws.readyState !== WebSocket.OPEN) return;
@@ -115,7 +161,7 @@ export default function LivePage() {
             'image/jpeg',
             1.0,
           );
-        }, 200);
+        }, intervalMs);
       });
     } catch (err) {
       setError(err.message || 'Could not access camera');
@@ -138,7 +184,23 @@ export default function LivePage() {
       videoRef.current.srcObject = null;
     }
     setFps(0);
+    streakRef.current = { label: null, count: 0 };
+    setStable(null);
   }
+
+  // Top-N distribution for the right column. Prefer the smoothed stable
+  // prediction; fall back to latest while waiting for first confirmation.
+  const display = stable || latest;
+  const topN = display?.probs
+    ? Object.entries(display.probs)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, TOP_N)
+    : null;
+  const showUnknown =
+    streaming &&
+    latest &&
+    latest.confidence != null &&
+    latest.confidence < CONFIDENCE_THRESHOLD;
 
   return (
     <main className="min-h-screen bg-ink text-bone">
@@ -196,34 +258,33 @@ export default function LivePage() {
                 </div>
               )}
 
-              {streaming && latest?.emotion && (
+              {streaming && (stable?.emotion || showUnknown) && (
                 <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-ink via-ink/60 to-transparent">
                   <div className="font-mono text-xs uppercase tracking-wider text-mist mb-2">CURRENT</div>
                   <div className="font-display text-6xl italic font-light text-rust">
-                    {latest.emotion.toUpperCase()}
+                    {stable?.emotion ? stable.emotion.toUpperCase() : 'READING…'}
                   </div>
-                  {latest.confidence != null && (
+                  {stable?.confidence != null && (
                     <div className="font-mono text-xs text-mist mt-2">
-                      {(latest.confidence * 100).toFixed(0)}% certain
+                      {(stable.confidence * 100).toFixed(0)}% certain
                     </div>
                   )}
 
-                  {/* Secondary affect dimensions — small, mono, beneath the main label */}
-                  {(latest.valence || latest.arousal || latest.intensity) && (
+                  {(stable?.valence || stable?.arousal || stable?.intensity) && (
                     <div className="flex gap-6 mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
-                      {latest.valence && (
+                      {stable.valence && (
                         <span>
-                          val <span className="text-bone">{latest.valence}</span>
+                          val <span className="text-bone">{stable.valence}</span>
                         </span>
                       )}
-                      {latest.arousal && (
+                      {stable.arousal && (
                         <span>
-                          arousal <span className="text-bone">{latest.arousal}</span>
+                          arousal <span className="text-bone">{stable.arousal}</span>
                         </span>
                       )}
-                      {latest.intensity && (
+                      {stable.intensity && (
                         <span>
-                          intensity <span className="text-bone">{latest.intensity}</span>
+                          intensity <span className="text-bone">{stable.intensity}</span>
                         </span>
                       )}
                     </div>
@@ -245,31 +306,57 @@ export default function LivePage() {
             )}
           </div>
 
-          {/* History feed */}
-          <div className="lg:col-span-4">
-            <div className="font-mono text-xs uppercase tracking-wider text-mist mb-6">
-              ── Stream feed
-            </div>
-            {history.length === 0 ? (
-              <div className="font-display text-2xl italic text-mist">
-                Nothing to read.
+          {/* Right column: top-N bars + history feed */}
+          <div className="lg:col-span-4 space-y-12">
+            {topN && topN.length > 0 && (
+              <div>
+                <div className="font-mono text-xs uppercase tracking-wider text-mist mb-6">
+                  ── Top {topN.length}
+                </div>
+                <ul className="space-y-3">
+                  {topN.map(([emotion, prob]) => (
+                    <li key={emotion} className="font-mono text-xs">
+                      <div className="flex justify-between mb-1">
+                        <span className="uppercase tracking-wider">{emotion}</span>
+                        <span className="text-mist">{(prob * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="h-[2px] bg-bone/10 overflow-hidden">
+                        <div
+                          className="h-full bg-rust transition-all duration-300"
+                          style={{ width: `${Math.max(2, prob * 100)}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ) : (
-              <ul className="space-y-3">
-                {history.map((h, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between border-b border-bone/10 pb-3"
-                    style={{ opacity: 1 - i * 0.1 }}
-                  >
-                    <span className="font-display text-2xl italic">{h.emotion || '—'}</span>
-                    <span className="font-mono text-xs text-mist">
-                      {h.confidence != null ? `${(h.confidence * 100).toFixed(0)}%` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             )}
+
+            <div>
+              <div className="font-mono text-xs uppercase tracking-wider text-mist mb-6">
+                ── Stream feed
+              </div>
+              {history.length === 0 ? (
+                <div className="font-display text-2xl italic text-mist">
+                  Nothing to read.
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {history.map((h, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between border-b border-bone/10 pb-3"
+                      style={{ opacity: 1 - i * 0.1 }}
+                    >
+                      <span className="font-display text-2xl italic">{h.emotion || '—'}</span>
+                      <span className="font-mono text-xs text-mist">
+                        {h.confidence != null ? `${(h.confidence * 100).toFixed(0)}%` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
