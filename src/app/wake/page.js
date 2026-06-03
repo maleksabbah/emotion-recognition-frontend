@@ -6,13 +6,16 @@
  * Flow:
  *   1. On mount, call the waker Lambda to start the EC2 (idempotent).
  *   2. Poll /health on the backend every 3s until it responds 200.
- *   3. Redirect to / once the backend is reachable.
+ *   3. Redirect to / (or ?next=...) once the backend is reachable.
  *
- * The waker URL and the backend health URL come from env vars so we
- * can swap them without code edits.
+ * The page is split into a small outer component and an inner one so we
+ * can wrap the inner — the part that calls `useSearchParams()` — in a
+ * Suspense boundary. Next 14's static rendering requires this when
+ * useSearchParams is used inside a client component, otherwise the
+ * build fails with "should be wrapped in a suspense boundary".
  */
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 const WAKER_URL = process.env.NEXT_PUBLIC_WAKER_URL;
@@ -24,7 +27,6 @@ const POLL_MS = 3000;
 // of the EC2 + container stack is usually 60–90s; allow plenty of room.
 const TIMEOUT_MS = 5 * 60 * 1000;
 
-
 // Phases tracked in UI state. Drive the headline + spinner + button.
 const PHASE = {
   WAKING: 'waking',   // POST'd to waker, waiting on instance to come up
@@ -34,7 +36,18 @@ const PHASE = {
 };
 
 
+// Outer page just sets the Suspense fallback. All the real work happens
+// in WakeInner so the useSearchParams call is inside the boundary.
 export default function WakePage() {
+  return (
+    <Suspense fallback={<WakeFrame headline="Waking the backend" subline="Standby." />}>
+      <WakeInner />
+    </Suspense>
+  );
+}
+
+
+function WakeInner() {
   const router = useRouter();
   const params = useSearchParams();
   // Where to send the user once the backend is alive. Default to /
@@ -142,6 +155,21 @@ export default function WakePage() {
       : error;
 
   return (
+    <WakeFrame
+      headline={headline}
+      subline={subline}
+      phase={phase}
+      seconds={seconds}
+    />
+  );
+}
+
+
+// Pure layout — accepts pre-computed strings so the Suspense fallback
+// can render the same frame with placeholder content before the inner
+// component mounts. No hooks here.
+function WakeFrame({ headline, subline, phase, seconds }) {
+  return (
     <main className="min-h-screen bg-ink text-bone flex items-center justify-center px-8">
       <div className="max-w-2xl w-full">
         <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-4">
@@ -153,7 +181,7 @@ export default function WakePage() {
         </h1>
         <p className="text-mist text-lg max-w-xl mb-12">{subline}</p>
 
-        {phase !== PHASE.ERROR && (
+        {phase && phase !== PHASE.ERROR && (
           <div className="flex items-center gap-4 font-mono text-xs uppercase tracking-wider text-mist">
             <span
               className={
