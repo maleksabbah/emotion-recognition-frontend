@@ -80,7 +80,7 @@ export default function UploadPage() {
     <main className="min-h-screen bg-ink text-bone">
       <header className="px-8 py-6 flex justify-between items-center border-b border-bone/10">
         <Link href="/" className="font-mono text-xs tracking-wider">
-          <span className="text-rust">●</span> MNTIS / ANALYZE
+          <span className="text-rust">{'●'}</span> MNTIS / ANALYZE
         </Link>
         <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
           <Link href="/upload" className="text-rust">Analyze</Link>
@@ -147,7 +147,7 @@ export default function UploadPage() {
                     onClick={reset}
                     className="absolute top-4 right-4 font-mono text-xs px-3 py-2 bg-ink/80 border border-bone/30 hover:border-rust hover:text-rust"
                   >
-                    REPLACE x
+                    REPLACE
                   </button>
                 )}
               </div>
@@ -186,7 +186,7 @@ export default function UploadPage() {
 
             {phase === 'idle' && file && (
               <button onClick={startAnalysis} className="btn-primary w-full">
-                Begin analysis ->
+                Begin analysis
               </button>
             )}
 
@@ -217,7 +217,7 @@ function ResultSummary({ result }) {
       )}
       {result.download?.download_url && (
         <a href={result.download.download_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-xs uppercase tracking-wider text-rust hover:underline mt-4">
-          Open full-size ->
+          Open full-size
         </a>
       )}
     </div>
