@@ -92,7 +92,7 @@ export default function UploadPage() {
 
       <div className="max-w-7xl mx-auto px-8 py-16">
         <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-4">
-          ── Composition no. 01
+          -- Composition no. 01
         </div>
         <h1 className="font-display text-7xl md:text-8xl font-light tracking-tight mb-16">
           Show me<br /><span className="italic text-rust">a face.</span>
@@ -147,7 +147,7 @@ export default function UploadPage() {
                     onClick={reset}
                     className="absolute top-4 right-4 font-mono text-xs px-3 py-2 bg-ink/80 border border-bone/30 hover:border-rust hover:text-rust"
                   >
-                    REPLACE ×
+                    REPLACE x
                   </button>
                 )}
               </div>
@@ -186,7 +186,7 @@ export default function UploadPage() {
 
             {phase === 'idle' && file && (
               <button onClick={startAnalysis} className="btn-primary w-full">
-                Begin analysis →
+                Begin analysis ->
               </button>
             )}
 
@@ -216,13 +216,8 @@ function ResultSummary({ result }) {
         </div>
       )}
       {result.download?.download_url && (
-        
-          href={result.download.download_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block font-mono text-xs uppercase tracking-wider text-rust hover:underline mt-4"
-        >
-          Open full-size →
+        <a href={result.download.download_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-xs uppercase tracking-wider text-rust hover:underline mt-4">
+          Open full-size ->
         </a>
       )}
     </div>
