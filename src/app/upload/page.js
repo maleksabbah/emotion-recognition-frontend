@@ -80,7 +80,7 @@ export default function UploadPage() {
     <main className="min-h-screen bg-ink text-bone">
       <header className="px-8 py-6 flex justify-between items-center border-b border-bone/10">
         <Link href="/" className="font-mono text-xs tracking-wider">
-          <span className="text-rust">●</span> FEELER / ANALYZE
+          <span className="text-rust">●</span> MNTIS / ANALYZE
         </Link>
         <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
           <Link href="/upload" className="text-rust">Analyze</Link>
@@ -218,7 +218,7 @@ function ResultSummary({ result }) {
         </div>
       )}
       {result.download?.download_url && (
-        <a
+        
           href={result.download.download_url}
           target="_blank"
           rel="noopener noreferrer"

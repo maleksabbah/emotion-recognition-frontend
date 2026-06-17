@@ -38,12 +38,12 @@ export default function AuthPage() {
       {/* Left visual panel */}
       <div className="hidden md:flex md:w-1/2 bg-rust relative overflow-hidden border-r border-bone/10">
         <Link href="/" className="absolute top-8 left-8 font-mono text-xs tracking-wider text-bone hover:text-ink transition-colors">
-          ← FEELER
+          ← MNTIS
         </Link>
 
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="font-display text-[18rem] leading-none italic font-light text-bone/95 select-none">
-            f.
+            m.
           </div>
         </div>
 
@@ -59,7 +59,7 @@ export default function AuthPage() {
       <div className="w-full md:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <Link href="/" className="md:hidden font-mono text-xs tracking-wider text-mist mb-12 inline-block">
-            ← FEELER
+            ← MNTIS
           </Link>
 
           <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-4">

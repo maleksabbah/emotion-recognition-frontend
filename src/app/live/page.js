@@ -6,22 +6,11 @@ import Link from 'next/link';
 import api from '@/lib/api';
 
 // ── Tunables ──────────────────────────────────────────────────────────
-// FPS at which we capture frames. Low FPS = fewer wrong-label flickers,
-// more readable headline. Raise to 5 for finer-grained feedback.
 const SEND_FPS = 1.5;
-// How many consecutive same-label predictions before we promote a label
-// to "stable" and show it in the big header. Eats brief blips.
 const STABILITY_FRAMES = 3;
-// Below this confidence, treat as "unknown" — model isn't sure enough
-// to commit to a single emotion.
 const CONFIDENCE_THRESHOLD = 0.40;
-// How many bars to show in the top-N distribution.
 const TOP_N = 3;
 
-
-// Pull the inner payload out regardless of whether the gateway wraps it.
-// Backend sends {"type":"result","data":{ top_emotion, valence, ... }}.
-// Older flat-object shapes still work.
 function extractPrediction(raw) {
   if (!raw) return null;
   const payload = raw.type === 'result' && raw.data ? raw.data : raw;
@@ -61,15 +50,10 @@ export default function LivePage() {
   const canvasRef = useRef(null);
   const wsRef = useRef(null);
   const intervalRef = useRef(null);
-  // Tracks consecutive same-label predictions, kept in a ref so the WS
-  // callback can read/write without stale-closure problems.
   const streakRef = useRef({ label: null, count: 0 });
 
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
-  // `latest` = most recent raw prediction (changes every frame).
-  // `stable` = label that's appeared ≥ STABILITY_FRAMES times AND has
-  // passed the confidence bar. This is what the big headline shows.
   const [latest, setLatest] = useState(null);
   const [stable, setStable] = useState(null);
   const [history, setHistory] = useState([]);
@@ -104,9 +88,6 @@ export default function LivePage() {
           setLatest(pred);
           setHistory((h) => [pred, ...h].slice(0, 8));
 
-          // Stability smoothing: only flip the headline emotion once the
-          // same label has come in N times in a row AND its confidence
-          // clears the threshold. Kills most per-frame flicker.
           const confOk =
             pred.confidence == null || pred.confidence >= CONFIDENCE_THRESHOLD;
           const streak = streakRef.current;
@@ -119,7 +100,6 @@ export default function LivePage() {
           if (confOk && streak.count >= STABILITY_FRAMES) {
             setStable(pred);
           } else if (!confOk && streak.count >= STABILITY_FRAMES) {
-            // Steady but uncertain — show "reading…" placeholder.
             setStable(null);
           }
         },
@@ -188,8 +168,6 @@ export default function LivePage() {
     setStable(null);
   }
 
-  // Top-N distribution for the right column. Prefer the smoothed stable
-  // prediction; fall back to latest while waiting for first confirmation.
   const display = stable || latest;
   const topN = display?.probs
     ? Object.entries(display.probs)
@@ -206,7 +184,7 @@ export default function LivePage() {
     <main className="min-h-screen bg-ink text-bone">
       <header className="px-8 py-6 flex justify-between items-center border-b border-bone/10">
         <Link href="/" className="font-mono text-xs tracking-wider">
-          <span className="text-rust">●</span> FEELER / LIVE
+          <span className="text-rust">●</span> MNTIS / LIVE
         </Link>
         <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
           <Link href="/upload">Analyze</Link>

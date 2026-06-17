@@ -35,7 +35,7 @@ export default function Home() {
       {/* ── Top bar ─────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 px-8 py-6 flex justify-between items-center">
         <div className="font-mono text-xs tracking-wider">
-          <span className="text-rust">●</span> FEELER / v1.0
+          <span className="text-rust">●</span> MNTIS / v1.0
         </div>
         <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
           <Link href="/upload" className="hover:text-rust transition-colors">Analyze</Link>
@@ -48,18 +48,15 @@ export default function Home() {
 
       {/* ── Hero ─────────────────────────────────────── */}
       <section className="min-h-screen flex flex-col justify-center px-8 pt-32 pb-20 relative">
-        {/* Background composition number */}
         <div className="absolute top-1/2 right-8 -translate-y-1/2 font-display text-[20rem] leading-none text-rust opacity-10 pointer-events-none select-none reveal" style={{ animationDelay: '0.4s' }}>
           07
         </div>
 
         <div className="max-w-7xl mx-auto w-full relative z-10">
-          {/* Tagline */}
           <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-8 reveal" style={{ animationDelay: '0.1s' }}>
             ── A study of seven feelings
           </div>
 
-          {/* Massive title */}
           <h1 className="font-display text-[15vw] md:text-[11vw] leading-[0.85] tracking-[-0.04em] font-light reveal" style={{ animationDelay: '0.2s' }}>
             <span className="block">Read the</span>
             <span className="block italic font-normal text-rust">unspoken.</span>
@@ -182,7 +179,7 @@ export default function Home() {
       <footer className="py-16 px-8">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
           <div>
-            <div className="font-display text-4xl font-light italic">feeler.</div>
+            <div className="font-display text-4xl font-light italic">mntis.</div>
             <div className="font-mono text-xs text-mist mt-2">A research instrument · 2026</div>
           </div>
           <div className="font-mono text-xs text-mist space-y-1">
