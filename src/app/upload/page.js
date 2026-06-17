@@ -12,7 +12,7 @@ export default function UploadPage() {
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [phase, setPhase] = useState('idle'); // idle | uploading | processing | done | error
+  const [phase, setPhase] = useState('idle');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
 
@@ -99,7 +99,6 @@ export default function UploadPage() {
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Drop zone / preview */}
           <div className="lg:col-span-7">
             {!preview ? (
               <div
@@ -155,7 +154,6 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* Side panel */}
           <div className="lg:col-span-5">
             <div className="font-mono text-xs uppercase tracking-wider text-mist mb-3">Status</div>
             <div className="font-display text-4xl mb-8 italic">
