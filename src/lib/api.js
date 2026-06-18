@@ -1,4 +1,115 @@
-async uploadFile(file, onProgress) {
+// API client for the Emotion Recognition Gateway
+// Handles auth, uploads, sessions, and live mode WebSocket
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+
+class APIClient {
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.accessToken = localStorage.getItem('access_token');
+      this.refreshToken = localStorage.getItem('refresh_token');
+    }
+  }
+
+  setTokens(access, refresh) {
+    this.accessToken = access;
+    this.refreshToken = refresh;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+    }
+  }
+
+  clearTokens() {
+    this.accessToken = null;
+    this.refreshToken = null;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    }
+  }
+
+  isAuthenticated() {
+    return !!this.accessToken;
+  }
+
+  _redirectToWake() {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname === '/wake') return;
+    const here = window.location.pathname + window.location.search;
+    window.location.href = '/wake?next=' + encodeURIComponent(here);
+  }
+
+  async request(method, path, body, isRetry = false) {
+    const headers = {};
+    if (this.accessToken) headers['Authorization'] = 'Bearer ' + this.accessToken;
+    if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
+
+    const opts = { method, headers };
+    if (body) opts.body = body instanceof FormData ? body : JSON.stringify(body);
+
+    let res;
+    try {
+      res = await fetch(API_URL + path, opts);
+    } catch (e) {
+      this._redirectToWake();
+      throw new Error('Backend is unreachable, redirecting to wake page.');
+    }
+
+    if (res.status === 401 && !isRetry && this.refreshToken) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) return this.request(method, path, body, true);
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      let detail;
+      try { detail = JSON.parse(text).detail || text; } catch (err) { detail = text; }
+      throw new Error(detail || 'Request failed: ' + res.status);
+    }
+
+    if (res.status === 204) return null;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return res.json();
+    return res.text();
+  }
+
+  async tryRefresh() {
+    try {
+      const res = await fetch(API_URL + '/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: this.refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      this.setTokens(data.access_token, data.refresh_token || this.refreshToken);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async register(email, username, password) {
+    return this.request('POST', '/auth/register', { email: email, username: username, password: password });
+  }
+
+  async login(email, password) {
+    const data = await this.request('POST', '/auth/login', { email: email, password: password });
+    this.setTokens(data.access_token, data.refresh_token);
+    return data;
+  }
+
+  async logout() {
+    this.clearTokens();
+  }
+
+  async me() {
+    return this.request('GET', '/auth/me');
+  }
+
+  async uploadFile(file, onProgress) {
     const presign = await this.request('POST', '/upload/request', {
       filename: file.name,
       content_type: file.type || 'image/jpeg',
@@ -7,7 +118,10 @@ async uploadFile(file, onProgress) {
 
     await this.putToS3(presign.upload_url, file, onProgress);
 
-    const mode = file.type.startsWith('video/') ? 'video' : 'photo';
+    var mode = 'photo';
+    if (file.type && file.type.startsWith('video/')) {
+      mode = 'video';
+    }
 
     const result = await this.request('POST', '/upload/complete', {
       session_id: presign.session_id,
@@ -17,3 +131,108 @@ async uploadFile(file, onProgress) {
 
     return { session_id: presign.session_id, ...result };
   }
+
+  putToS3(url, file, onProgress) {
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', url);
+      xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', function(e) {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+      }
+
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error('S3 upload failed: ' + xhr.status));
+      };
+      xhr.onerror = function() { reject(new Error('S3 upload network error')); };
+      xhr.send(file);
+    });
+  }
+
+  async getSession(sessionId) {
+    return this.request('GET', '/sessions/' + sessionId + '/status');
+  }
+
+  async getSessionDownload(sessionId) {
+    return this.request('GET', '/sessions/' + sessionId + '/download');
+  }
+
+  async listSessions() {
+    return this.request('GET', '/sessions');
+  }
+
+  async pollSession(sessionId, onUpdate, intervalMs) {
+    if (!intervalMs) intervalMs = 1000;
+    var DONE = new Set(['complete', 'completed']);
+    var FAIL = new Set(['failed', 'error']);
+    var self = this;
+
+    return new Promise(function(resolve, reject) {
+      var fake = 10;
+
+      var tick = async function() {
+        try {
+          var status = await self.getSession(sessionId);
+          var s = (status.status || status.state || '').toLowerCase();
+
+          var progress;
+          if (typeof status.progress === 'number' && status.progress > 0) {
+            progress = Math.round(status.progress * 100);
+          } else if (s === 'burning') {
+            progress = Math.max(fake, 85);
+          } else {
+            fake = Math.min(80, fake + 7);
+            progress = fake;
+          }
+          if (DONE.has(s)) progress = 100;
+
+          if (onUpdate) onUpdate(Object.assign({}, status, { status: s, progress: progress }));
+
+          if (DONE.has(s)) {
+            var download = null;
+            try {
+              download = await self.getSessionDownload(sessionId);
+            } catch (e) {
+              // Non-fatal
+            }
+            resolve(Object.assign({}, status, { status: s, download: download }));
+          } else if (FAIL.has(s)) {
+            reject(new Error(status.error || 'Processing failed'));
+          } else {
+            setTimeout(tick, intervalMs);
+          }
+        } catch (err) {
+          reject(err);
+        }
+      };
+      tick();
+    });
+  }
+
+  openLiveSocket(onMessage, onError, onClose) {
+    var url = WS_URL + '/live?token=' + (this.accessToken || '');
+    var ws = new WebSocket(url);
+
+    ws.onmessage = function(event) {
+      try {
+        var data = JSON.parse(event.data);
+        if (onMessage) onMessage(data);
+      } catch (err) {
+        if (onMessage) onMessage({ raw: event.data });
+      }
+    };
+    ws.onerror = function(err) { if (onError) onError(err); };
+    ws.onclose = function() { if (onClose) onClose(); };
+
+    return ws;
+  }
+}
+
+export const api = new APIClient();
+export default api;
