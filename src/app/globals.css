@@ -19,12 +19,6 @@ html, body {
   background: #0a0908;
   color: #f5f1e8;
   font-family: var(--font-body);
-}
-
-/* Horizontal overflow is clipped on <html> only (it propagates to the
-   viewport). Setting it on <body> too would make body a scroll container
-   and break the sticky nav. */
-html {
   overflow-x: hidden;
 }
 
@@ -118,175 +112,34 @@ input, textarea {
   outline: none;
 }
 
-/* ── Components ─────────────────────────────────────────────
-   In @layer components so Tailwind utilities (w-full, mt-6, ...)
-   can still override them on a page. */
-@layer components {
-  /* Buttons — rounded, sentence case, medium weight. Hover is a subtle
-     opacity / border change, not a colour inversion. */
-  .btn-primary,
-  .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.875rem 1.75rem;
-    border-radius: 10px;
-    font-family: var(--font-body);
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 1.2;
-    letter-spacing: -0.005em;
-    text-transform: none;
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: opacity 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
-  }
+.btn-primary {
+  background: #c1440e;
+  color: #f5f1e8;
+  padding: 1rem 2rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid #c1440e;
+}
 
-  .btn-primary {
-    background: #c1440e;
-    color: #f5f1e8;
-    border: 1px solid #c1440e;
-  }
+.btn-primary:hover {
+  background: transparent;
+  color: #c1440e;
+}
 
-  .btn-primary:hover {
-    opacity: 0.88;
-  }
+.btn-ghost {
+  background: transparent;
+  color: #f5f1e8;
+  padding: 1rem 2rem;
+  border: 1px solid #f5f1e8;
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-  .btn-ghost {
-    background: transparent;
-    color: #f5f1e8;
-    border: 1px solid rgba(245, 241, 232, 0.2);
-  }
-
-  .btn-ghost:hover {
-    border-color: rgba(245, 241, 232, 0.5);
-    background: rgba(245, 241, 232, 0.03);
-  }
-
-  .btn-primary:disabled,
-  .btn-ghost:disabled,
-  .btn-primary[aria-disabled='true'],
-  .btn-ghost[aria-disabled='true'] {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .btn-primary:disabled:hover,
-  .btn-ghost:disabled:hover {
-    opacity: 0.45;
-  }
-
-  .btn-ghost:disabled:hover {
-    border-color: rgba(245, 241, 232, 0.2);
-    background: transparent;
-  }
-
-  /* Small size for nav and inline actions */
-  .btn-sm {
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 13px;
-  }
-
-  /* Text inputs — editorial serif, rounded to match buttons */
-  .field-input {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border-radius: 10px;
-    border: 1px solid rgba(245, 241, 232, 0.15);
-    background: rgba(245, 241, 232, 0.02);
-    color: #f5f1e8;
-    font-family: var(--font-display);
-    font-size: 1.25rem;
-    font-weight: 300;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-  }
-
-  .field-input:hover {
-    border-color: rgba(245, 241, 232, 0.3);
-  }
-
-  .field-input:focus {
-    border-color: #c1440e;
-    background: rgba(245, 241, 232, 0.03);
-  }
-
-  /* Cards / panels */
-  .panel {
-    border: 1px solid rgba(245, 241, 232, 0.12);
-    border-radius: 12px;
-    background: rgba(245, 241, 232, 0.015);
-  }
-
-  /* Error / notice boxes */
-  .alert-error {
-    border: 1px solid rgba(193, 68, 14, 0.45);
-    background: rgba(193, 68, 14, 0.1);
-    border-radius: 10px;
-    padding: 0.875rem 1rem;
-    color: rgba(245, 241, 232, 0.92);
-    font-size: 0.875rem;
-    line-height: 1.5;
-  }
-
-  .alert-error a {
-    color: #f5f1e8;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-
-  /* Legal pages */
-  .legal h2 {
-    font-family: var(--font-display);
-    font-size: 1.75rem;
-    font-weight: 400;
-    letter-spacing: -0.02em;
-    margin-top: 3rem;
-    margin-bottom: 1rem;
-    color: #f5f1e8;
-  }
-
-  .legal h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-top: 1.75rem;
-    margin-bottom: 0.5rem;
-    color: #f5f1e8;
-  }
-
-  .legal p,
-  .legal li {
-    font-size: 0.95rem;
-    line-height: 1.8;
-    color: rgba(245, 241, 232, 0.72);
-    font-weight: 300;
-  }
-
-  .legal p {
-    margin-bottom: 1rem;
-  }
-
-  .legal ul {
-    list-style: disc;
-    padding-left: 1.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .legal li {
-    margin-bottom: 0.4rem;
-  }
-
-  .legal strong {
-    color: #f5f1e8;
-    font-weight: 500;
-  }
-
-  .legal a {
-    color: #f5f1e8;
-    text-decoration: underline;
-    text-decoration-color: #c1440e;
-    text-underline-offset: 3px;
-  }
+.btn-ghost:hover {
+  background: #f5f1e8;
+  color: #0a0908;
 }
