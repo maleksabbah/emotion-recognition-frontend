@@ -1,7 +1,8 @@
 import './globals.css';
 export const metadata = {
-  title: 'MNTIS — Multi-Stream Facial Emotion Recognition',
-  description: 'Real-time facial emotion recognition powered by transformer fusion across face regions.',
+  title: 'mntis — Read the emotion in a face',
+  description:
+    'Facial emotion recognition for photos, video and live camera. See the emotion on every face, how positive or negative it reads, and how intense. Free to start.',
 };
 export default function RootLayout({ children }) {
   return (

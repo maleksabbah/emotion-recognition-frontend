@@ -4,6 +4,17 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
 
+// Error with the backend's limit fields attached: .code, .status, .detail,
+// .retryAfter (seconds, from Retry-After), plus any extra JSON fields
+// such as .resets_at.
+function apiError(message, fields) {
+  const err = new Error(message);
+  Object.keys(fields || {}).forEach(function(k) {
+    if (k !== 'message' && k !== 'stack') err[k] = fields[k];
+  });
+  return err;
+}
+
 class APIClient {
   constructor() {
     if (typeof window !== 'undefined') {
@@ -41,7 +52,9 @@ class APIClient {
     window.location.href = '/wake?next=' + encodeURIComponent(here);
   }
 
-  async request(method, path, body, isRetry = false) {
+  // opts.wake === false: on a network failure, throw instead of sending the
+  // user to /wake (used for public, best-effort calls like /plans).
+  async request(method, path, body, isRetry = false, reqOpts = {}) {
     const headers = {};
     if (this.accessToken) headers['Authorization'] = 'Bearer ' + this.accessToken;
     if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
@@ -53,20 +66,41 @@ class APIClient {
     try {
       res = await fetch(API_URL + path, opts);
     } catch (e) {
+      if (reqOpts.wake === false) {
+        throw apiError('Backend is unreachable.', { code: 'network_error', status: 0 });
+      }
       this._redirectToWake();
-      throw new Error('Backend is unreachable, redirecting to wake page.');
+      throw apiError('Backend is unreachable, redirecting to wake page.', { code: 'network_error', status: 0 });
     }
 
     if (res.status === 401 && !isRetry && this.refreshToken) {
       const refreshed = await this.tryRefresh();
-      if (refreshed) return this.request(method, path, body, true);
+      if (refreshed) return this.request(method, path, body, true, reqOpts);
     }
 
     if (!res.ok) {
+      // Limit errors arrive as {"detail": "...", "code": "...", ...extra}.
+      // Keep .message = detail so existing UI keeps working, and expose
+      // .code / .status / extra fields (resets_at, ...) for friendlier copy.
       const text = await res.text();
-      let detail;
-      try { detail = JSON.parse(text).detail || text; } catch (err) { detail = text; }
-      throw new Error(detail || 'Request failed: ' + res.status);
+      let data = null;
+      try { data = JSON.parse(text); } catch (err) { data = null; }
+      let detail = data && data.detail != null ? data.detail : text;
+      if (detail && typeof detail !== 'string') {
+        // Validation errors (422) arrive as arrays of objects.
+        detail = Array.isArray(detail)
+          ? detail.map((d) => (d && d.msg) || JSON.stringify(d)).join('; ')
+          : JSON.stringify(detail);
+      }
+      const extra = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+      // CORS doesn't expose Retry-After, so the gateway also puts it in the body.
+      const retry = res.headers.get('Retry-After') ?? extra.retry_after ?? null;
+      throw apiError(detail || 'Request failed: ' + res.status, Object.assign({}, extra, {
+        detail: detail,
+        code: extra.code || null,
+        status: res.status,
+        retryAfter: retry != null && !isNaN(Number(retry)) ? Number(retry) : null,
+      }));
     }
 
     if (res.status === 204) return null;
@@ -109,14 +143,28 @@ class APIClient {
     return this.request('GET', '/auth/me');
   }
 
+  // {plan, unlimited, limits, usage, usage_available, period_start, resets_at}
+  async getQuota() {
+    return this.request('GET', '/auth/quota');
+  }
+
+  // Public. {plans: [...]}. Never redirects to /wake; callers fall back to
+  // the hardcoded limits in lib/plans.js.
+  async getPlans() {
+    return this.request('GET', '/plans', null, false, { wake: false });
+  }
+
   async uploadFile(file, onProgress) {
+    // The presigned URL is signed for this exact size and content type, so
+    // the PUT below must send the same File object, unmodified.
+    const contentType = file.type || 'image/jpeg';
     const presign = await this.request('POST', '/upload/request', {
       filename: file.name,
-      content_type: file.type || 'image/jpeg',
+      content_type: contentType,
       size: file.size,
     });
 
-    await this.putToS3(presign.upload_url, file, onProgress);
+    await this.putToS3(presign.upload_url, file, onProgress, contentType);
 
     var mode = 'photo';
     if (file.type && file.type.startsWith('video/')) {
@@ -132,11 +180,12 @@ class APIClient {
     return { session_id: presign.session_id, ...result };
   }
 
-  putToS3(url, file, onProgress) {
+  putToS3(url, file, onProgress, contentType) {
     return new Promise(function(resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('PUT', url);
-      xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+      // Content-Length is set by the browser from the File itself.
+      xhr.setRequestHeader('Content-Type', contentType || file.type || 'image/jpeg');
 
       if (onProgress) {
         xhr.upload.addEventListener('progress', function(e) {
@@ -148,9 +197,9 @@ class APIClient {
 
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else reject(new Error('S3 upload failed: ' + xhr.status));
+        else reject(apiError('Upload to storage failed: ' + xhr.status, { code: 'storage_upload_failed', status: xhr.status }));
       };
-      xhr.onerror = function() { reject(new Error('S3 upload network error')); };
+      xhr.onerror = function() { reject(apiError('Upload to storage failed: network error', { code: 'storage_upload_failed', status: 0 })); };
       xhr.send(file);
     });
   }
@@ -203,7 +252,7 @@ class APIClient {
             }
             resolve(Object.assign({}, status, { status: s, download: download }));
           } else if (FAIL.has(s)) {
-            reject(new Error(status.error || 'Processing failed'));
+            reject(apiError(status.error || 'Processing failed', { code: 'processing_failed', status: 200 }));
           } else {
             setTimeout(tick, intervalMs);
           }
@@ -228,7 +277,9 @@ class APIClient {
       }
     };
     ws.onerror = function(err) { if (onError) onError(err); };
-    ws.onclose = function() { if (onClose) onClose(); };
+    // Passes the CloseEvent so callers can read code/reason
+    // (4002 = live limit reached; reason explains which one).
+    ws.onclose = function(event) { if (onClose) onClose(event); };
 
     return ws;
   }
