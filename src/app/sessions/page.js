@@ -4,9 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
-import SiteNav from '@/components/SiteNav';
-import SiteFooter from '@/components/SiteFooter';
-import { ErrorBox } from '@/components/ui';
 
 export default function SessionsPage() {
   const router = useRouter();
@@ -65,10 +62,20 @@ export default function SessionsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-ink text-bone flex flex-col">
-      <SiteNav />
+    <main className="min-h-screen bg-ink text-bone">
+      <header className="px-8 py-6 flex justify-between items-center border-b border-bone/10">
+        <Link href="/" className="font-mono text-xs tracking-wider">
+          <span className="text-rust">●</span> MNTIS / ARCHIVE
+        </Link>
+        <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
+          <Link href="/upload">Analyze</Link>
+          <Link href="/live">Live</Link>
+          <Link href="/sessions" className="text-rust">Archive</Link>
+          <button onClick={() => { api.logout(); router.push('/'); }}>Sign out</button>
+        </nav>
+      </header>
 
-      <div className="flex-1 max-w-7xl w-full mx-auto px-5 md:px-8 py-16">
+      <div className="max-w-7xl mx-auto px-8 py-16">
         <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-4">
           ── Composition no. 03
         </div>
@@ -80,15 +87,19 @@ export default function SessionsPage() {
           <div className="font-display text-2xl italic text-mist">Loading...</div>
         )}
 
-        <ErrorBox error={error} className="mb-6" />
+        {error && (
+          <div className="font-mono text-xs text-rust border-l-2 border-rust pl-4 py-2 mb-6">
+            {error}
+          </div>
+        )}
 
         {!loading && !error && sessions.length === 0 && (
-          <div className="panel p-12 text-center">
+          <div className="border border-bone/20 p-12 text-center">
             <div className="font-display text-4xl italic text-mist mb-6">
               Nothing yet.
             </div>
-            <Link href="/upload" className="btn-primary">
-              Analyze your first face
+            <Link href="/upload" className="btn-primary inline-block">
+              Analyze your first face →
             </Link>
           </div>
         )}
@@ -105,7 +116,7 @@ export default function SessionsPage() {
                 <li
                   key={id || i}
                   onClick={() => viewable && openSession(s)}
-                  className={`py-6 flex items-baseline justify-between gap-8 group px-4 -mx-4 rounded-lg transition-colors ${
+                  className={`py-6 flex items-baseline justify-between gap-8 group px-4 -mx-4 transition-colors ${
                     viewable ? 'cursor-pointer hover:bg-bone/[0.02]' : 'opacity-60 cursor-not-allowed'
                   }`}
                 >
@@ -133,8 +144,6 @@ export default function SessionsPage() {
           </ul>
         )}
       </div>
-
-      <SiteFooter />
     </main>
   );
 }

@@ -1,13 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { notifyAuthChanged } from '@/lib/useSignedIn';
-import SiteNav from '@/components/SiteNav';
-import SiteFooter from '@/components/SiteFooter';
-import { ErrorBox } from '@/components/ui';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -17,18 +13,6 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // /auth?mode=register opens straight into sign-up (nav "Get started").
-  // Read from window instead of useSearchParams to avoid a Suspense boundary.
-  useEffect(() => {
-    const m = new URLSearchParams(window.location.search).get('mode');
-    if (m === 'register') setMode('register');
-  }, []);
-
-  function switchMode(m) {
-    setMode(m);
-    setError('');
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -41,7 +25,6 @@ export default function AuthPage() {
       } else {
         await api.login(email, password);
       }
-      notifyAuthChanged();
       router.push('/upload');
     } catch (err) {
       setError(err.message || 'Something went wrong');
@@ -51,11 +34,12 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen bg-ink text-bone flex flex-col">
-      <SiteNav />
-      <div className="flex flex-1 min-h-[calc(100vh-4rem)]">
+    <main className="min-h-screen bg-ink text-bone flex">
       {/* Left visual panel */}
       <div className="hidden md:flex md:w-1/2 bg-rust relative overflow-hidden border-r border-bone/10">
+        <Link href="/" className="absolute top-8 left-8 font-mono text-xs tracking-wider text-bone hover:text-ink transition-colors">
+          ← MNTIS
+        </Link>
 
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="font-display text-[18rem] leading-none italic font-light text-bone/95 select-none">
@@ -72,8 +56,11 @@ export default function AuthPage() {
       </div>
 
       {/* Right form panel */}
-      <div className="w-full md:w-1/2 flex items-center justify-center px-5 py-12 md:p-8">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
+          <Link href="/" className="md:hidden font-mono text-xs tracking-wider text-mist mb-12 inline-block">
+            ← MNTIS
+          </Link>
 
           <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-4">
             ── {mode === 'login' ? 'Re-entry' : 'New observer'}
@@ -87,7 +74,7 @@ export default function AuthPage() {
             )}
           </h1>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
             <Field label="Email" value={email} onChange={setEmail} type="email" required />
 
             {mode === 'register' && (
@@ -96,33 +83,26 @@ export default function AuthPage() {
 
             <Field label="Password" value={password} onChange={setPassword} type="password" required />
 
-            <ErrorBox error={error} />
-
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Working…' : (mode === 'login' ? 'Sign in' : 'Create account')}
-            </button>
-
-            {mode === 'register' && (
-              <p className="text-xs text-mist leading-relaxed">
-                By creating an account you agree to the{' '}
-                <Link href="/terms" className="text-bone underline underline-offset-4 decoration-rust">Terms</Link>
-                {' '}and{' '}
-                <Link href="/privacy" className="text-bone underline underline-offset-4 decoration-rust">Privacy Policy</Link>.
-              </p>
+            {error && (
+              <div className="font-mono text-xs text-rust border-l-2 border-rust pl-4 py-2">
+                {error}
+              </div>
             )}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-50">
+              {loading ? 'Working...' : (mode === 'login' ? 'Sign in →' : 'Create account →')}
+            </button>
           </form>
 
-          <div className="mt-10 text-sm text-mist">
+          <div className="mt-12 font-mono text-xs text-mist">
             {mode === 'login' ? (
-              <>No account?{' '}<button type="button" onClick={() => switchMode('register')} className="text-bone font-medium underline underline-offset-4 decoration-rust hover:decoration-bone">Create one</button></>
+              <>NO ACCOUNT? <button onClick={() => setMode('register')} className="text-rust hover:underline">CREATE ONE</button></>
             ) : (
-              <>Have an account?{' '}<button type="button" onClick={() => switchMode('login')} className="text-bone font-medium underline underline-offset-4 decoration-rust hover:decoration-bone">Sign in</button></>
+              <>HAVE AN ACCOUNT? <button onClick={() => setMode('login')} className="text-rust hover:underline">SIGN IN</button></>
             )}
           </div>
         </div>
       </div>
-      </div>
-      <SiteFooter />
     </main>
   );
 }
@@ -130,14 +110,13 @@ export default function AuthPage() {
 function Field({ label, value, onChange, type = 'text', required }) {
   return (
     <label className="block">
-      <div className="font-mono text-xs uppercase tracking-wider text-mist mb-2">{label}</div>
+      <div className="font-mono text-xs uppercase tracking-wider text-mist mb-3">{label}</div>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        autoComplete={type === 'password' ? 'current-password' : type === 'email' ? 'email' : 'username'}
-        className="field-input"
+        className="w-full bg-transparent border-b border-bone/30 py-3 text-2xl font-display font-light focus:border-rust transition-colors"
       />
     </label>
   );
