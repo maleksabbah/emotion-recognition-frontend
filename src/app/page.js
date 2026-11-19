@@ -2,6 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import SiteNav from '@/components/SiteNav';
+import SiteFooter from '@/components/SiteFooter';
+import { TrustPoints, CheckIcon } from '@/components/ui';
+import useSignedIn from '@/lib/useSignedIn';
+import { FALLBACK_PLANS, findPlan, planFeatureLines } from '@/lib/plans';
 
 const EMOTIONS = [
   { name: 'JOY', color: '#d4a574', meta: '01' },
@@ -16,6 +21,8 @@ const EMOTIONS = [
 export default function Home() {
   const [time, setTime] = useState('');
   const [hovered, setHovered] = useState(null);
+  const signedIn = useSignedIn();
+  const freeLines = planFeatureLines(findPlan(FALLBACK_PLANS, 'free')).slice(0, 3);
 
   useEffect(() => {
     const update = () => {
@@ -31,30 +38,25 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-ink text-bone overflow-hidden">
-      {/* ── Top bar ─────────────────────────────────── */}
-      <header className="fixed top-0 left-0 right-0 z-50 px-8 py-6 flex justify-between items-center">
-        <div className="font-mono text-xs tracking-wider">
-          <span className="text-rust">●</span> MNTIS / v1.0
-        </div>
-        <nav className="flex gap-8 text-xs font-mono tracking-wider uppercase">
-          <Link href="/upload" className="hover:text-rust transition-colors">Analyze</Link>
-          <Link href="/live" className="hover:text-rust transition-colors">Live</Link>
-          <Link href="/sessions" className="hover:text-rust transition-colors">Archive</Link>
-          <Link href="/auth" className="hover:text-rust transition-colors">Sign in</Link>
-        </nav>
-        <div className="font-mono text-xs tracking-wider hidden md:block">{time}</div>
-      </header>
+    <main className="min-h-screen bg-ink text-bone overflow-x-clip">
+      <SiteNav />
 
       {/* ── Hero ─────────────────────────────────────── */}
-      <section className="min-h-screen flex flex-col justify-center px-8 pt-32 pb-20 relative">
-        <div className="absolute top-1/2 right-8 -translate-y-1/2 font-display text-[20rem] leading-none text-rust opacity-10 pointer-events-none select-none reveal" style={{ animationDelay: '0.4s' }}>
-          07
+      <section className="min-h-[calc(100vh-4rem)] flex flex-col justify-center px-5 md:px-8 pt-16 pb-20 relative">
+        {/* Opacity lives on the wrapper: the .reveal animation animates
+            opacity to 1 and would otherwise override opacity-10. */}
+        <div className="absolute top-1/2 right-8 -translate-y-1/2 opacity-10 pointer-events-none select-none" aria-hidden="true">
+          <div className="font-display text-[20rem] leading-none text-rust reveal" style={{ animationDelay: '0.4s' }}>
+            07
+          </div>
         </div>
 
         <div className="max-w-7xl mx-auto w-full relative z-10">
-          <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-8 reveal" style={{ animationDelay: '0.1s' }}>
-            ── A study of seven feelings
+          <div className="flex items-baseline justify-between gap-6 mb-8 reveal" style={{ animationDelay: '0.1s' }}>
+            <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist">
+              ── A study of seven feelings
+            </div>
+            <div className="font-mono text-xs tracking-wider text-mist hidden md:block">{time}</div>
           </div>
 
           <h1 className="font-display text-[15vw] md:text-[11vw] leading-[0.85] tracking-[-0.04em] font-light reveal" style={{ animationDelay: '0.2s' }}>
@@ -64,18 +66,21 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mt-16 reveal" style={{ animationDelay: '0.5s' }}>
             <p className="md:col-span-5 md:col-start-1 text-lg leading-relaxed text-bone/80 font-light">
-              A multi-stream neural architecture trained on
-              <span className="text-bone"> 88,192 faces </span>
-              across six datasets. Five region streams attend to each other through transformer fusion to recognize seven core emotional states with state-of-the-art precision.
+              Show it a photograph, a video, or your own face through the camera. mntis finds every face in the
+              frame and reads what it carries
+              <span className="text-bone"> — the feeling, how sure we are, how warm or cold it runs, how strongly it shows.</span>
             </p>
 
-            <div className="md:col-span-5 md:col-start-8 flex flex-col gap-4 items-start">
-              <Link href="/upload" className="btn-primary inline-block">
-                Upload an image →
-              </Link>
-              <Link href="/live" className="btn-ghost inline-block">
-                Try live mode
-              </Link>
+            <div className="md:col-span-6 md:col-start-7 flex flex-col gap-5 items-start">
+              <div className="flex flex-wrap gap-3">
+                <Link href={signedIn ? '/upload' : '/auth?mode=register'} className="btn-primary">
+                  {signedIn ? 'Upload an image' : 'Get started free'}
+                </Link>
+                <Link href="/live" className="btn-ghost">
+                  Try live mode
+                </Link>
+              </div>
+              <TrustPoints items={['Free to start', 'No credit card', 'Photos, video and live']} />
             </div>
           </div>
         </div>
@@ -83,7 +88,7 @@ export default function Home() {
 
       {/* ── Emotion list ─────────────────────────────── */}
       <section className="border-t border-bone/10 py-20">
-        <div className="max-w-7xl mx-auto px-8">
+        <div className="max-w-7xl mx-auto px-5 md:px-8">
           <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-12">
             ── The Catalogue
           </div>
@@ -124,21 +129,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Architecture stats ────────────────────── */}
+      {/* ── What you get ─────────────────────────── */}
       <section className="border-t border-bone/10 py-20">
-        <div className="max-w-7xl mx-auto px-8">
+        <div className="max-w-7xl mx-auto px-5 md:px-8">
+          <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-12">
+            ── What comes back
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <Stat label="Faces trained" value="88,192" sub="across 6 datasets" />
-            <Stat label="Region streams" value="05" sub="face / eyes / mouth / cheeks / forehead" />
-            <Stat label="Output dimensions" value="04" sub="emotion / valence / arousal / intensity" />
-            <Stat label="Architecture" value="ResNet18 + Transformer" sub="multi-stream fusion" />
+            <Stat label="Feelings named" value="07" sub="from joy to stillness" />
+            <Stat label="Readings per face" value="04" sub="emotion / valence / arousal / intensity" />
+            <Stat label="Ways in" value="03" sub="photo / video / live camera" />
+            <Stat label="To begin" value="Free" sub="no credit card" />
           </div>
         </div>
       </section>
 
       {/* ── How it works ─────────────────────────── */}
       <section className="border-t border-bone/10 py-32">
-        <div className="max-w-7xl mx-auto px-8">
+        <div className="max-w-7xl mx-auto px-5 md:px-8">
           <h2 className="font-display text-6xl md:text-8xl font-light tracking-tight mb-20">
             <span className="text-mist">How a face</span><br />
             <span className="italic">becomes a feeling.</span>
@@ -147,19 +155,48 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             <Step
               num="01"
-              title="Detect"
-              body="MTCNN locates the face. MediaPipe maps 468 landmarks. Five regions are isolated with surgical precision: the whole face, the eyes, the mouth, the cheeks, the forehead."
+              title="Show"
+              body="Upload a photograph or a short video, or turn on your camera and go live. Nothing to install; it all happens in the browser."
             />
             <Step
               num="02"
-              title="Encode"
-              body="A pretrained ResNet18 reads the face. Four region CNNs read their patches. Each stream returns a vector of features — a numerical fingerprint of what is there."
+              title="Read"
+              body="We find each face in the frame and read the expression it wears — once for a photo, frame by frame for a video, moment by moment when live."
             />
             <Step
               num="03"
-              title="Attend"
-              body="A two-layer transformer lets the regions look at each other. Wide eyes ask the mouth what it means. The mouth answers. A single state emerges. Seven emotions. One label. One number."
+              title="Receive"
+              body="Your image comes back annotated. Each face carries a name for what it shows, how certain we are, how positive or negative it reads, and how intense. Everything waits in your archive."
             />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing teaser ───────────────────────── */}
+      <section className="border-t border-bone/10 py-24">
+        <div className="max-w-7xl mx-auto px-5 md:px-8 grid grid-cols-1 md:grid-cols-12 gap-12 items-end">
+          <div className="md:col-span-6">
+            <div className="font-mono text-xs tracking-[0.3em] uppercase text-mist mb-6">── Pricing</div>
+            <h2 className="font-display text-6xl md:text-7xl font-light tracking-tight leading-[0.95]">
+              Free to begin.<br />
+              <span className="italic text-rust">More, soon.</span>
+            </h2>
+          </div>
+          <div className="md:col-span-5 md:col-start-8">
+            <ul className="space-y-3 mb-8">
+              {freeLines.map((l) => (
+                <li key={l} className="flex items-start gap-2.5 text-bone/80 font-light">
+                  <CheckIcon size={14} className="text-rust mt-[5px] shrink-0" />
+                  {l}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/pricing" className="btn-ghost">See pricing</Link>
+              {signedIn === false && (
+                <Link href="/auth?mode=register" className="btn-primary">Get started</Link>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -175,25 +212,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── Footer ───────────────────────────────── */}
-      <footer className="py-16 px-8">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
-          <div>
-            <div className="font-display text-4xl font-light italic">mntis.</div>
-            <div className="font-mono text-xs text-mist mt-2">A research instrument · 2026</div>
-          </div>
-          <div className="font-mono text-xs text-mist space-y-1">
-            <div>BUILT WITH PYTORCH</div>
-            <div>RESNET18 / TRANSFORMER FUSION</div>
-            <div>FASTAPI / NEXT.JS / S3</div>
-          </div>
-          <div className="flex gap-6 md:justify-end font-mono text-xs uppercase tracking-wider">
-            <Link href="/upload" className="hover:text-rust">Analyze</Link>
-            <Link href="/live" className="hover:text-rust">Live</Link>
-            <Link href="/auth" className="hover:text-rust">Sign in</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }
