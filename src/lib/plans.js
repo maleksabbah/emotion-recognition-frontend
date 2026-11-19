@@ -5,6 +5,8 @@ export const FALLBACK_PLANS = [
   {
     name: 'free',
     available: true,
+    price_cents_monthly: 0,
+    currency: 'usd',
     photos_per_month: 50,
     videos_per_month: 5,
     max_image_bytes: 10485760,
@@ -18,6 +20,8 @@ export const FALLBACK_PLANS = [
   {
     name: 'pro',
     available: false,
+    price_cents_monthly: 1000,
+    currency: 'usd',
     photos_per_month: 1000,
     videos_per_month: 100,
     max_image_bytes: 26214400,
@@ -25,10 +29,26 @@ export const FALLBACK_PLANS = [
     max_video_seconds: 300,
     uploads_per_hour: 200,
     max_concurrent_jobs: 3,
-    live_minutes_per_month: 600,
+    live_minutes_per_month: 300,
     live_session_max_seconds: 1800,
   },
 ];
+
+// { price_cents_monthly: 1000, currency: 'usd' } -> "$10"; 0 -> null (free)
+export function formatPrice(plan) {
+  const cents = plan?.price_cents_monthly;
+  if (cents == null || isNaN(cents) || Number(cents) <= 0) return null;
+  const amount = Number(cents) / 100;
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: (plan.currency || 'usd').toUpperCase(),
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return '$' + amount;
+  }
+}
 
 export function findPlan(plans, name) {
   const list = Array.isArray(plans) && plans.length ? plans : FALLBACK_PLANS;

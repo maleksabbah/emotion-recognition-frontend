@@ -183,7 +183,7 @@ export default function Home() {
             </h2>
           </div>
           <div className="md:col-span-5 md:col-start-8">
-            <ul className="space-y-3 mb-8">
+            <ul className="space-y-3 mb-5">
               {freeLines.map((l) => (
                 <li key={l} className="flex items-start gap-2.5 text-bone/80 font-light">
                   <CheckIcon size={14} className="text-rust mt-[5px] shrink-0" />
@@ -191,6 +191,9 @@ export default function Home() {
                 </li>
               ))}
             </ul>
+            <p className="text-sm text-mist mb-8">
+              Pro, with much higher limits, is coming soon at $10 a month.
+            </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/pricing" className="btn-ghost">See pricing</Link>
               {signedIn === false && (

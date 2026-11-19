@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
-import { FALLBACK_PLANS, findPlan, planFeatureLines } from '@/lib/plans';
+import { FALLBACK_PLANS, findPlan, formatPrice, planFeatureLines } from '@/lib/plans';
 import useSignedIn from '@/lib/useSignedIn';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
@@ -59,7 +59,7 @@ export default function PricingPage() {
     {
       key: 'free',
       name: 'Free',
-      price: 'Free.',
+      price: formatPrice(free),
       tagline: 'Everything you need to start reading faces.',
       plan: free,
       available: free?.available !== false,
@@ -68,8 +68,8 @@ export default function PricingPage() {
     {
       key: 'pro',
       name: 'Pro',
-      price: null,
-      tagline: 'More room for larger files, longer videos and longer live sessions.',
+      price: formatPrice(pro),
+      tagline: 'For regular use: twenty times the photos, longer videos and hours of live mode.',
       plan: pro,
       available: pro?.available === true,
       extras: ['Annotated results in your archive'],
@@ -88,8 +88,8 @@ export default function PricingPage() {
           <span className="italic text-rust">More, soon.</span>
         </h1>
         <p className="text-lg text-bone/75 font-light leading-relaxed max-w-xl mb-16">
-          Start on the free plan with a monthly allowance of photos, videos and live minutes. A Pro plan with
-          higher limits is on its way.
+          Start on the free plan with a monthly allowance of photos, videos and live minutes. Pro, with much
+          higher limits, is coming soon.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
@@ -160,8 +160,9 @@ function PlanCard({ tier, signedIn }) {
         )}
       </div>
 
-      <div className="font-display text-6xl font-light tracking-tight mb-2">
-        {tier.price ? tier.price : <span className="italic text-bone/60">Soon.</span>}
+      <div className="flex items-baseline gap-2 mb-2">
+        <span className="font-display text-6xl font-light tracking-tight">{tier.price || 'Free.'}</span>
+        {tier.price && <span className="text-sm text-mist">/ month</span>}
       </div>
       <p className="text-sm text-mist font-light mb-8">{tier.tagline}</p>
 
